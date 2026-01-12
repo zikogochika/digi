@@ -1,0 +1,8 @@
+{
+  "name": "AtlasPOS AI",
+  "description": "Système de gestion et POS intelligent pour le marché marocain avec assistant IA et gestion de Karné (Crédit).",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
