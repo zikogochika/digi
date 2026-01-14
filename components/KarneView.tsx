@@ -26,34 +26,18 @@ const KarneView: React.FC<KarneViewProps> = ({
   const [aiGenerating, setAiGenerating] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  // Selected Customer for Detailed View
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [viewMode, setViewMode] = useState<'SALES' | 'SETTLEMENTS'>('SALES');
   const [customerSettlements, setCustomerSettlements] = useState<Settlement[]>([]);
-  
-  // Editing Sale State
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [itemSearch, setItemSearch] = useState('');
-
-  // Settlement Modal State
   const [isSettling, setIsSettling] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState<Settlement | null>(null);
   const [settleData, setSettleData] = useState({ amount: '', method: 'CASH', note: '' });
-
-  // Form Data for Customer
-  const [formData, setFormData] = useState({ 
-      name: '', 
-      phone: '', 
-      ice: '', 
-      initialBalance: '0', 
-      initialBalanceType: 'CREDIT' as 'CREDIT' | 'ADVANCE', 
-      note: ''
-  });
+  const [formData, setFormData] = useState({ name: '', phone: '', ice: '', initialBalance: '0', initialBalanceType: 'CREDIT' as 'CREDIT' | 'ADVANCE', note: '' });
 
   const totalCredit = customers.reduce((acc, c) => acc + (c.balance || 0), 0);
 
-  // Load settlements cleanly when customer is selected or settlement added
   useEffect(() => {
       if(selectedCustomer && viewMode === 'SETTLEMENTS') {
           loadSettlements();
@@ -67,7 +51,6 @@ const KarneView: React.FC<KarneViewProps> = ({
       });
   };
 
-  // Filter sales for the selected customer
   const customerHistory = selectedCustomer 
     ? sales
         .filter(s => s.customerId === selectedCustomer.id)
@@ -115,42 +98,25 @@ const KarneView: React.FC<KarneViewProps> = ({
       if(isNaN(amount) || amount <= 0) return alert("Montant invalide");
 
       if (editingSettlement) {
-          // MODE ÉDITION
           const updatedSettlement: Settlement = {
               ...editingSettlement,
               amount: amount,
               method: settleData.method,
               note: settleData.note,
-              date: new Date().toISOString() // Update timestamp or keep old one? Usually nice to keep tracking
+              date: new Date().toISOString()
           };
-          
           const oldAmount = editingSettlement.amount;
           await db.updateSettlement(updatedSettlement, oldAmount);
-          
-          // Mise à jour locale du solde (Balance - (New - Old))
           const diff = amount - oldAmount;
           setSelectedCustomer({ ...selectedCustomer, balance: (selectedCustomer.balance || 0) - diff });
-
       } else {
-          // MODE CRÉATION
-          const settlement: Settlement = {
-              id: `pay-${Date.now()}`,
-              entityId: selectedCustomer.id,
-              entityName: selectedCustomer.name,
-              type: 'CUSTOMER_IN',
-              amount: amount,
-              date: new Date().toISOString(),
-              method: settleData.method,
-              note: settleData.note
-          };
-
-          await db.addSettlement(settlement);
-          
-          // Mise à jour locale du solde
-          setSelectedCustomer({ ...selectedCustomer, balance: (selectedCustomer.balance || 0) - amount });
-          
-          // Trigger global sync if needed
-          if(onSettleDebt) onSettleDebt(selectedCustomer.id, amount);
+          // FIX: Only trigger onSettleDebt which performs the DB persistence and state update.
+          // Directly calling db.addSettlement here caused double deduction when App.tsx handler was also called.
+          if(onSettleDebt) {
+              onSettleDebt(selectedCustomer.id, amount);
+              // Optimistic UI update for the current view
+              setSelectedCustomer({ ...selectedCustomer, balance: (selectedCustomer.balance || 0) - amount });
+          }
       }
 
       setIsSettling(false);
@@ -160,7 +126,6 @@ const KarneView: React.FC<KarneViewProps> = ({
   const handleDeleteSettlement = async (settlement: Settlement) => {
       if(confirm(`Supprimer ce règlement de ${settlement.amount} DH ? Le solde du client augmentera de ce montant.`)) {
           await db.deleteSettlement(settlement.id);
-          // Update local state: Debt increases back because payment is cancelled
           if(selectedCustomer) {
               setSelectedCustomer({ ...selectedCustomer, balance: (selectedCustomer.balance || 0) + settlement.amount });
           }
@@ -168,13 +133,11 @@ const KarneView: React.FC<KarneViewProps> = ({
       }
   };
 
-  // New function to settle specific sale amount
   const handleSettleSale = (sale: Sale, customerId: string) => {
       const restToPay = sale.total - (sale.advance || 0);
       if (confirm(`Régler le reste de ce bon (${restToPay.toFixed(2)} DH) ? Cela déduira ce montant de la dette globale.`)) {
           if (onMarkSalePaid) {
               onMarkSalePaid(sale.id, customerId);
-              // Update local state optimistic
               if(selectedCustomer) {
                   setSelectedCustomer({ ...selectedCustomer, balance: (selectedCustomer.balance || 0) - restToPay });
               }
@@ -218,7 +181,6 @@ const KarneView: React.FC<KarneViewProps> = ({
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    // Confirmer la suppression
     if(window.confirm("Supprimer définitivement ce client ? Les ventes associées resteront dans l'historique mais le dossier client sera perdu.")) {
         if (onDeleteCustomer) {
             onDeleteCustomer(id);
@@ -229,18 +191,14 @@ const KarneView: React.FC<KarneViewProps> = ({
 
   const sendWhatsAppReminder = async (customer: Customer, isSmart: boolean = false) => {
     let message = `Salam ${customer.name}, kankarkom b-hsab dialkom: ${(customer.balance || 0).toFixed(2)} DH. Chokran !`;
-    
     if (isSmart) {
       setAiGenerating(customer.id);
       message = await generateSmartWhatsApp(customer);
       setAiGenerating(null);
     }
-
     const url = `https://wa.me/212${customer.phone.substring(1)}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
-
-  // --- SALE EDITING LOGIC ---
 
   const handleEditSaleItemQty = (itemId: string, delta: number) => {
       if(!editingSale) return;
@@ -250,7 +208,6 @@ const KarneView: React.FC<KarneViewProps> = ({
           }
           return item;
       }).filter(item => item.quantity > 0);
-      
       const newTotal = updatedItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
       setEditingSale({ ...editingSale, items: updatedItems, total: newTotal });
   };
@@ -259,13 +216,11 @@ const KarneView: React.FC<KarneViewProps> = ({
       if(!editingSale) return;
       const existing = editingSale.items.find(i => i.id === product.id);
       let updatedItems;
-      
       if(existing) {
           updatedItems = editingSale.items.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       } else {
           updatedItems = [...editingSale.items, { ...product, quantity: 1 }];
       }
-      
       const newTotal = updatedItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
       setEditingSale({ ...editingSale, items: updatedItems, total: newTotal });
       setItemSearch('');
@@ -316,7 +271,6 @@ const KarneView: React.FC<KarneViewProps> = ({
         </div>
       </header>
 
-      {/* SETTLEMENT MODAL */}
       {isSettling && selectedCustomer && (
           <div className="fixed inset-0 bg-dark/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl animate-scale-up">
@@ -324,14 +278,12 @@ const KarneView: React.FC<KarneViewProps> = ({
                       <h3 className="text-xl font-black">{editingSettlement ? 'Modifier Règlement' : 'Règlement Client'}</h3>
                       <button onClick={() => setIsSettling(false)}><X className="text-gray-400"/></button>
                   </div>
-                  
                   {!editingSettlement && (
                       <div className="text-center mb-6">
                           <p className="text-xs font-bold text-gray-400 uppercase">Dette Actuelle</p>
                           <p className="text-3xl font-black text-red-600">{(selectedCustomer.balance || 0).toFixed(2)} DH</p>
                       </div>
                   )}
-
                   <div className="space-y-4">
                       <div>
                           <label className="text-xs font-bold text-gray-500 uppercase ml-2">Montant {editingSettlement ? 'Modifié' : 'Reçu'}</label>
@@ -375,7 +327,6 @@ const KarneView: React.FC<KarneViewProps> = ({
           </div>
       )}
 
-      {/* EDIT SALE MODAL */}
       {editingSale && selectedCustomer && (
           <div className="fixed inset-0 bg-dark/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-[2rem] p-8 w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -386,9 +337,7 @@ const KarneView: React.FC<KarneViewProps> = ({
                       </div>
                       <button onClick={() => setEditingSale(null)} className="p-2 hover:bg-gray-100 rounded-full"><X /></button>
                   </div>
-
                   <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                      {/* Add Item Search */}
                       <div className="relative z-20">
                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4"/>
                           <input 
@@ -412,7 +361,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                               </div>
                           )}
                       </div>
-
                       <div className="space-y-2">
                           {editingSale.items.map(item => (
                               <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
@@ -432,7 +380,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                           ))}
                       </div>
                   </div>
-
                   <div className="mt-6 pt-6 border-t border-gray-100">
                       <div className="flex justify-between items-center mb-6">
                           <span className="font-bold text-gray-500 uppercase text-xs">Nouveau Total</span>
@@ -488,7 +435,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                     className="w-full p-4 bg-gray-50 rounded-2xl border-none font-bold focus:ring-2 focus:ring-primary/20 mt-1"
                   />
                </div>
-
                {!editingId && (
                    <div className="col-span-2 bg-gray-50 p-4 rounded-2xl mt-2">
                        <p className="text-xs font-black text-gray-500 uppercase mb-3">Solde de départ</p>
@@ -522,7 +468,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                        />
                    </div>
                )}
-
                <button 
                  onClick={handleSaveCustomer}
                  className="col-span-2 w-full py-5 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex justify-center gap-3 mt-4"
@@ -538,12 +483,10 @@ const KarneView: React.FC<KarneViewProps> = ({
               <button onClick={() => setSelectedCustomer(null)} className="flex items-center gap-2 text-gray-500 hover:text-primary font-bold mb-4">
                   <ArrowLeft size={20} /> Retour à la liste
               </button>
-              
               <div className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-10 opacity-10">
                       <User size={200} />
                   </div>
-                  
                   <div className="relative z-10 flex flex-col md:flex-row justify-between items-start gap-8">
                       <div>
                           <div className="flex items-center gap-4 mb-4">
@@ -564,7 +507,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                               </div>
                           )}
                       </div>
-
                       <div className="text-right bg-gray-50 p-6 rounded-3xl border border-gray-100 min-w-[250px]">
                           <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Solde Actuel</p>
                           <p className={`text-4xl font-black ${(selectedCustomer.balance || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
@@ -578,7 +520,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                       </div>
                   </div>
               </div>
-
               <div className="flex items-center gap-4 border-b border-gray-200 pb-1">
                   <button 
                     onClick={() => setViewMode('SALES')} 
@@ -593,7 +534,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                       Historique Règlements
                   </button>
               </div>
-
               <div className="bg-white rounded-[2rem] border border-gray-200 overflow-hidden shadow-sm">
                   {viewMode === 'SALES' ? (
                       <table className="w-full text-left">
@@ -708,7 +648,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                 <button onClick={(e) => startEdit(customer, e)} className="p-2 bg-gray-50 rounded-lg text-gray-400 hover:text-primary"><Edit3 size={16} /></button>
                 <button onClick={(e) => handleDelete(customer.id, e)} className="p-2 bg-gray-50 rounded-lg text-gray-400 hover:text-red-500"><Trash2 size={16} /></button>
             </div>
-            
             <div className="flex justify-between items-start mb-8">
               <div className="h-16 w-16 rounded-2xl bg-gray-50 flex items-center justify-center text-primary font-black text-2xl border border-gray-100 group-hover:scale-110 transition-transform">
                 {customer.name.charAt(0).toUpperCase()}
@@ -717,9 +656,7 @@ const KarneView: React.FC<KarneViewProps> = ({
                 {(customer.balance || 0) > 0 ? 'En Dette' : 'À jour'}
               </div>
             </div>
-            
             <h3 className="text-2xl font-black text-gray-900 mb-2 truncate">{customer.name}</h3>
-            
             <div className="space-y-4 mb-10 flex-1">
                <div className="flex items-center text-gray-400 text-xs font-bold">
                  <Phone className="h-4 w-4 mr-3 text-primary/30" />
@@ -734,7 +671,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                  Fidélité: <span className="ml-1 text-secondary font-black">{customer.points} PTS</span>
                </div>
             </div>
-
             <div className="pt-8 border-t border-gray-50 flex items-center justify-between mt-auto">
                 <div>
                     <p className="text-[10px] text-gray-400 font-black uppercase mb-1 tracking-widest">Solde Actuel</p>
@@ -754,7 +690,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                       </button>
                       <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-dark text-white text-[8px] font-black px-2 py-1 rounded opacity-0 group-hover/smart:opacity-100 transition-opacity whitespace-nowrap uppercase tracking-widest">Rappel IA</span>
                    </div>
-                   
                    <button 
                     onClick={() => { setSelectedCustomer(customer); setIsSettling(true); setEditingSettlement(null); setSettleData({ amount: '', method: 'CASH', note: '' }); }}
                     className="p-4 bg-primary text-white rounded-[1.5rem] hover:bg-emerald-700 transition-all shadow-xl shadow-primary/20 flex items-center gap-3 active:scale-95"
@@ -764,7 +699,6 @@ const KarneView: React.FC<KarneViewProps> = ({
                    </button>
                 </div>
             </div>
-            
             <button 
               onClick={(e) => { e.stopPropagation(); sendWhatsAppReminder(customer, false); }}
               className="absolute right-8 top-28 opacity-0 group-hover:opacity-100 transition-opacity p-2 text-green-500 hover:scale-110"

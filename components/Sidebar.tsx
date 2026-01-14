@@ -6,7 +6,7 @@ import { AppView } from '../types';
 interface SidebarProps {
   currentView: AppView;
   onChangeView: (view: AppView) => void;
-  enabledModules?: { // New Prop
+  enabledModules?: { 
       pos: boolean;
       stock: boolean;
       ai: boolean;
@@ -15,7 +15,6 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, enabledModules }) => {
-  // Default to all true if not provided (fallback)
   const modules = enabledModules || { pos: true, stock: true, ai: true, accounting: true };
 
   const allNavItems = [
@@ -23,7 +22,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, enabledMod
     { id: AppView.POS, label: 'Caisse (POS)', icon: ShoppingCart, visible: modules.pos },
     { id: AppView.STOCK, label: 'Stock & Mouvements', icon: Package, visible: modules.stock },
     { id: AppView.BILLING, label: 'Factures & Bons', icon: FileText, visible: modules.accounting },
-    { id: AppView.PURCHASES, label: 'Achats & Fournisseurs', icon: ShoppingBag, visible: modules.stock },
+    { id: AppView.PURCHASES, label: 'Bons d\'Achat', icon: ShoppingBag, visible: modules.stock },
+    { id: AppView.SUPPLIERS, label: 'Fournisseurs (Hsab)', icon: Truck, visible: true },
     { id: AppView.KARNE, label: 'Clients (Crédit)', icon: Users, visible: true },
     { id: AppView.REPORTS, label: 'Rapports & Bénéfice', icon: PieChart, visible: true },
     { id: AppView.EXPENSES, label: 'Dépenses', icon: WalletCards, visible: true },

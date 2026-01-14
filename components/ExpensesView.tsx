@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { Expense } from '../types';
-import { Plus, WalletCards, Calendar, Trash2, PieChart, Sparkles, AlertOctagon } from 'lucide-react';
+import { Plus, WalletCards, Calendar, Trash2, PieChart, Sparkles, AlertOctagon, PlayCircle, Loader2 } from 'lucide-react';
 import { analyzeExpensesAudit } from '../services/geminiService';
 
 interface ExpensesViewProps {
@@ -13,15 +14,23 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onD
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<Expense['category']>('AUTRE');
+  
+  // AI Audit State
   const [auditMsg, setAuditMsg] = useState('');
+  const [isAuditing, setIsAuditing] = useState(false);
 
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
 
-  useEffect(() => {
-     if(expenses.length > 0 && !auditMsg) {
-         analyzeExpensesAudit(expenses).then(setAuditMsg);
+  const handleRunAudit = async () => {
+     if(expenses.length === 0) return;
+     setIsAuditing(true);
+     try {
+         const msg = await analyzeExpensesAudit(expenses);
+         setAuditMsg(msg);
+     } finally {
+         setIsAuditing(false);
      }
-  }, [expenses]);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,18 +48,28 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({ expenses, onAddExpense, onD
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Gestion des Dépenses (Masarif)</h1>
           <p className="text-gray-500">Suivez vos sorties d'argent pour calculer votre bénéfice réel.</p>
         </div>
-        <div className="bg-amber-50 border border-amber-100 px-6 py-3 rounded-2xl flex items-center gap-3">
-          <PieChart className="text-amber-600" />
-          <div>
-            <p className="text-xs text-amber-700 font-bold uppercase">Total Dépenses</p>
-            <p className="text-xl font-black text-amber-900">{totalExpenses.toFixed(2)} DH</p>
-          </div>
+        <div className="flex gap-4">
+             <button 
+                onClick={handleRunAudit}
+                disabled={isAuditing || expenses.length === 0}
+                className="bg-indigo-50 text-indigo-600 px-6 py-3 rounded-2xl flex items-center gap-2 font-bold text-xs uppercase hover:bg-indigo-100 transition-colors disabled:opacity-50"
+             >
+                {isAuditing ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16}/>}
+                Audit IA
+             </button>
+             <div className="bg-amber-50 border border-amber-100 px-6 py-3 rounded-2xl flex items-center gap-3">
+              <PieChart className="text-amber-600" />
+              <div>
+                <p className="text-xs text-amber-700 font-bold uppercase">Total Dépenses</p>
+                <p className="text-xl font-black text-amber-900">{totalExpenses.toFixed(2)} DH</p>
+              </div>
+            </div>
         </div>
       </div>
 

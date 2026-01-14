@@ -3,21 +3,16 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Product, Customer, Sale, Supplier, Expense, Tenant } from '../types';
 
 // --- CONFIGURATION ---
-const API_KEY = process.env.API_KEY || '';
-// Initialisation sécurisée : ne plante pas si la clé est absente, mais désactive l'IA
-const ai = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
+// Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- HELPER ROBUSTE ---
-// Cette fonction attrape TOUTES les erreurs (Quota, Réseau, Parsing)
-// et retourne une valeur de secours (fallback)
 const safeGenerateContent = async (
   model: string, 
   contents: any, 
   fallback: string | any, 
   config?: any
 ) => {
-  if (!ai) return fallback; // Si pas de clé, on renvoie direct le fallback
-  
   try {
     const response = await ai.models.generateContent({
       model,
@@ -25,12 +20,15 @@ const safeGenerateContent = async (
       config
     });
     
-    // Vérification stricte de la réponse
     if (!response || !response.text) return fallback;
     return response.text;
   } catch (error: any) {
-    // Log discret pour le développeur, pas d'alerte pour l'utilisateur
-    console.warn("Atlas AI [Mode Hors Ligne/Quota]:", error.message || "Erreur inconnue");
+    // Gestion spécifique du Quota (429) pour ne pas polluer la console
+    if (JSON.stringify(error).includes('429') || error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+        console.warn("Atlas AI: Quota atteint. Mode hors ligne activé.");
+    } else {
+        console.warn("Atlas AI Error:", error.message || "Erreur inconnue");
+    }
     return fallback;
   }
 };
@@ -38,20 +36,24 @@ const safeGenerateContent = async (
 // --- SERVICES EXPORTÉS ---
 
 export const processInvoiceImage = async (base64Image: string): Promise<any> => {
-  // Fallback structure pour ne pas casser l'UI d'import
   const fallbackData = {
-      supplierName: "Fournisseur (Scan Non Dispo)",
+      supplierName: "",
       date: new Date().toISOString().split('T')[0],
       total: 0,
       items: []
   };
 
-  if (!ai) return fallbackData;
-
-  const prompt = `Tu es l'expert comptable d'Atlas PRO. 
-  Analyse cette facture d'achat fournisseur. 
-  Extrais : le nom du fournisseur, la date, et chaque ligne d'article (nom, quantité, prix unitaire d'achat).
-  Si le nom d'un produit est complexe, simplifie-le. Renvoie du JSON strict.`;
+  const prompt = `Tu es un assistant comptable pour un commerce au Maroc.
+  Analyse cette image de Bon de Livraison ou Facture.
+  
+  Extrais les informations suivantes :
+  1. "supplierName": Le nom de l'entreprise ou du fournisseur en haut de la facture (Ex: Centrale Danone, Copag, Grossiste X).
+  2. "date": La date de la facture (Format YYYY-MM-DD).
+  3. "total": Le montant total net à payer.
+  4. "items": La liste des produits achetés (Nom, Quantité, Prix d'achat unitaire).
+  
+  Si tu ne trouves pas le nom du fournisseur, mets une chaine vide.
+  Renvoie uniquement du JSON.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -92,7 +94,6 @@ export const processInvoiceImage = async (base64Image: string): Promise<any> => 
     if (!text) throw new Error("Réponse vide");
     return JSON.parse(text.trim());
   } catch (error) {
-    console.warn("OCR Error (Quota):", error);
     return fallbackData;
   }
 };
@@ -107,20 +108,18 @@ export const generateBusinessInsight = async (
   return safeGenerateContent(
       "gemini-3-flash-preview",
       `Context: ${context}. Question: ${query}. Réponds en une phrase courte en Darija (latino) ou Français Business.`,
-      "Le service AI est momentanément en pause (Quota). Vos chiffres sont sauvegardés."
+      "Service AI momentanément indisponible (Quota)."
   );
 };
 
 export const getAISearchIntent = async (query: string, inventory: Product[]): Promise<string[]> => {
-  // Fallback immédiat : Recherche standard par texte
   const basicSearch = inventory
       .filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
       .map(p => p.id);
 
-  if (query.length < 2 || !ai) return basicSearch;
+  if (query.length < 2) return basicSearch;
 
   try {
-    // Version optimisée pour économiser des tokens
     const miniInv = inventory.slice(0, 50).map(p => `${p.id}:${p.name}`).join(','); 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -150,7 +149,6 @@ export const polishDocumentNotes = async (notes: string): Promise<string> => {
 };
 
 export const generateProductMagicFill = async (productName: string): Promise<Partial<Product>> => {
-  if (!ai) return {};
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -186,7 +184,7 @@ export const analyzeExpensesAudit = async (expenses: Expense[]): Promise<string>
     return safeGenerateContent(
         "gemini-3-flash-preview",
         `Analyse dépense audit: ${expenses.length} lignes. Donne un conseil économie court.`,
-        "Surveillez vos dépenses régulières pour optimiser la trésorerie."
+        "Surveillez vos d\u00e9penses r\u00e9guli\u00e8res pour optimiser la tr\u00e9sorerie."
     );
 };
 
@@ -199,7 +197,6 @@ export const generateStaffFeedback = async (name: string, role: string): Promise
 };
 
 export const generateProductImage = async (productName: string): Promise<string | null> => {
-  // Désactivé pour économiser le quota et éviter les crashs
   return `https://placehold.co/400x400?text=${encodeURIComponent(productName.substring(0, 20))}`;
 };
 
@@ -219,16 +216,12 @@ export const lookupProductByBarcode = async (barcode: string): Promise<Partial<P
     } catch (e) {
         console.warn("Barcode API Error", e);
     }
-    // Fallback simple sans IA pour éviter l'appel quota
     return { name: "Produit Scanné", category: "Divers" };
 };
 
 // --- ANALYTICS ---
 export const generateSaaSInsights = async (tenants: Tenant[]): Promise<any> => {
-    // Return static data on failure
     const fallback = { healthScore: 100, devRecommendation: "Mode Hors Ligne", riskAlert: "Aucun" };
-    
-    if(!ai) return fallback;
     
     try {
         const response = await ai.models.generateContent({
@@ -245,7 +238,7 @@ export const generateSaaSInsights = async (tenants: Tenant[]): Promise<any> => {
 export const analyzeDashboardRisks = async (sales: Sale[], products: Product[], customers: Customer[]): Promise<string> => {
     return safeGenerateContent(
         "gemini-3-flash-preview",
-        `Analyse business Maroc. Ventes: ${sales.length}. Crédit: ${customers.reduce((a,b)=>a+b.balance,0)}. Une phrase Darija.`,
+        `Analyse business Maroc. Ventes: ${sales.length}. Cr\u00e9dit: ${customers.reduce((a,b)=>a+b.balance,0)}. Une phrase Darija.`,
         "L'activité est stable aujourd'hui. Lah yskher."
     );
 };

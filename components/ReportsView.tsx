@@ -94,18 +94,22 @@ const ReportsView: React.FC<ReportsViewProps> = ({ sales, expenses, products }) 
 
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
            {/* Graphique Ventes */}
-           <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+           <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
               <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><TrendingUp size={20}/> Évolution des Ventes (7 jours)</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#94a3b8', fontSize:12, fontWeight:'bold'}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill:'#94a3b8', fontSize:12, fontWeight:'bold'}} />
-                        <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius:'16px', border:'none', boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)'}} />
-                        <Bar dataKey="vente" fill="#0F766E" radius={[10, 10, 10, 10]} barSize={40} />
-                    </BarChart>
-                </ResponsiveContainer>
+              <div className="h-64 w-full min-w-0">
+                {stats.chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={stats.chartData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#94a3b8', fontSize:12, fontWeight:'bold'}} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{fill:'#94a3b8', fontSize:12, fontWeight:'bold'}} />
+                            <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius:'16px', border:'none', boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)'}} />
+                            <Bar dataKey="vente" fill="#0F766E" radius={[10, 10, 10, 10]} barSize={40} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="h-full flex items-center justify-center text-gray-400 font-bold text-sm">Pas assez de données</div>
+                )}
               </div>
            </div>
 

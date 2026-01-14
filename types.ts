@@ -3,7 +3,7 @@ export interface Tenant {
   id: string;
   companyName: string;
   email: string;
-  planId: string; // Changed from enum to string ID to link to dynamic plans
+  planId: string;
   modules: {
     pos: boolean;
     stock: boolean;
@@ -20,7 +20,7 @@ export interface Plan {
   name: string;
   price: number;
   description: string;
-  features: string[]; // List of text features for display
+  features: string[];
   modules: {
     pos: boolean;
     stock: boolean;
@@ -33,7 +33,7 @@ export interface Plan {
 export interface LandingFeature {
   title: string;
   text: string;
-  icon: string; // Name of lucide icon
+  icon: string;
 }
 
 export interface LandingPageConfig {
@@ -103,8 +103,8 @@ export interface Sale {
   date: string; 
   items: CartItem[];
   total: number;
-  advance?: number; // Montant payé en avance (Tsb9)
-  paymentMethod: string; // Changed to string to support custom methods
+  advance?: number;
+  paymentMethod: string;
   customerId?: string;
   userId?: string;
   isPaid?: boolean;
@@ -117,7 +117,7 @@ export interface Document {
   customerId: string;
   items: CartItem[];
   total: number;
-  advance?: number; // Montant payé en avance
+  advance?: number;
   status: 'PAYÉ' | 'EN_ATTENTE' | 'ANNULÉ' | 'CONVERTI';
   notes?: string;
 }
@@ -149,16 +149,19 @@ export interface Supplier {
   phone: string;
   debt: number;
   category: string;
+  ice?: string;
+  address?: string;
+  notes?: string;
 }
 
 export interface Settlement {
   id: string;
-  entityId: string; // customerId or supplierId
+  entityId: string;
   entityName: string;
   type: 'CUSTOMER_IN' | 'SUPPLIER_OUT';
   amount: number;
   date: string;
-  method: string; // CASH, CHECK, TRANSFER
+  method: string;
   note?: string;
 }
 
@@ -183,8 +186,8 @@ export interface CompanySettings {
   documentFormat: 'A4' | 'A5';
   currency: string;
   tvaEnabled: boolean;
-  taxRate?: number; // Taux de TVA par défaut (ex: 20)
-  customPaymentMethods?: string[]; // Liste des modes de paiement (Cash, Card, etc.)
+  taxRate?: number;
+  customPaymentMethods?: string[];
 }
 
 export enum AppView {
